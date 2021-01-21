@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<!-- La idea es hacer un editor autocontenido en la medida de lo posible. El editor debe tener capacidad para importar y exportar archivos OGT v0.5 (por el momento), realizar cambios en tamaño de la imagen y cambio de pixeles. -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor OGT</title>
+    <!-- Imports -->
+    <script src="//code.jquery.com/jquery-3.5.1.slim.min.js"></script> <!--Si, soy un dinosaurio, que pasa-->
+    <script src="//cdnjs.cloudflare.com/ajax/libs/phaser/3.51.0/phaser.min.js"></script>
+</head>
+<body>
+    <div id="thegrid">
+        <div id="header">
+            <h1>Editor de gráficos OGT</h1>
+        </div>
+        <div id="editor_container">
+            <canvas id="editor"></canvas>
+        </div>
+        <div id="controls_container">
+            <fieldset>
+                <label><span>Nombre del fichero:</span> <input type=text value="sintitulo.ogt" name="filename" id="filename"/></label>
+                <label><span>Versión:</span> <select name="filetype" id="filetype"><option value="1">OGT RAW</option><option value="2">OGT TIGHT</option></select></label>
+                <label><span>Ancho:</span> <input type="number" name="filewidth" id="filewidth" value="8"/></label>
+                <label><span>Alto:</span> <input type="number" name="fileheight" id="fileheight" value="8"/></label>
+                <label><a id="fileimport" href="#">Importar</a><a id="fileexport" href="#">Exportar</a></label>
+                <textarea name="filecontent" id="filecontent"></textarea>
+                <hr/>
+                <h4>Consola</h4>
+                <div id="editor_log"></div>
+            </fieldset>
+        </div>
+        <div id="footer">
+            v0.0000000001
+        </div>
+    </div>
+    <!-- Sección para los estilos manuales -->
+    <style>
+        #thegrid {
+            display: grid;
+            grid-column-gap: 10px;
+            grid-template-columns: 2fr 1fr;
+            grid-template-rows: auto;
+            grid-template-areas: "header header" "editor controls" "footer footer";
+        }
+        #header {
+            grid-area: header;
+        }
+        #editor_container {
+            grid-area: editor;
+        }
+        #controls_container {
+            grid-area: controls;
+        }
+        #footer {
+            grid-area: footer;
+        }
+        label {
+            display: flex;
+            align-items: middle;
+            justify-content: space-between;
+            line-height: 2;
+        }
+        label > span {
+            display: block;
+        }
+        label > input, label > select {
+            display: block;
+        }
+        textarea {
+            width: 100%;
+            height: 5rem;
+            display: block;
+            resize: none;
+        }
+        #editor_log {
+            border: 1px solid grey;
+            height: 5rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1rem;
+            overflow: scroll;
+            white-space: pre;
+        }
+        h4 {
+            display: inline-block;
+            margin: 0; 
+            margin-bottom: -1px;
+            padding: 2px; 
+            padding-right: 4px;
+            border: 1px solid grey;
+            border-top-right-radius: 5px;
+        }
+        #editor {
+            width: 100%;
+            box-shadow: 2px 2px 3px rgba(0,0,0,0.5);
+        }
+    </style>
+    <!-- Sección para los scripts-->
+    <script>
+        const consoleLevel = 1; // Si el mensaje de debug es igual o inferior a este valor, muestralo al usuario (niveles: 0 = no tiene mensaje, 1 = error, 2 = aviso, 3 = info)
+        const debugLevel   = 3; // Si el mensaje de debug es igual o inferior a este valor, muestralo en la consola de desarrollo
+        const gridSize     = 101; // cuanto ocupará cada pixel por defecto; en pixeles
+
+
+
+        window.lienzo = {
+            contenido: [],
+            pixeles: [],
+            ancho: 0,
+            alto: 0,
+            ultimaposX: 0,
+            ultimaposY: 0,
+            redim: function (w,h) {
+                // Si ya tiene el ancho correcto, no hace falta redimensionar
+                if (this.ancho == w && this.alto == h) {
+                    return true;
+                }
+                // Solo hace falta redimensionar si el ancho o alto son mayores; si es menor podemos dejarlo como está.
+                if (this.ancho < w || this.alto < h) {
+                    for (y = 0; y < h; y++) {
+                        // Esta posición de la matriz 'contenido' tiene un array dentro? Si no es el caso, inicializala con un array vacío
+                        if (!Array.isArray(this.contenido[y])) {
+                            this.contenido[y] = [];
+                            this.pixeles[y] = [];
+                        };
+                        for (x = 0; x < w; x++) {
+                            // Esta posición es un string? Si no es el caso, inicializar con "#FFFFFF"
+                            if (typeof this.contenido[y][x] !== "string") {
+                                this.contenido[y][x] = "#FFFFFF";
+                            }
+                        }
+                    }
+                }
+                // Actualizamos las propiedades
+                this.ancho = w;
+                this.alto = h;
+                return true;
+            }
+        };
+        
+        let config = {
+            type: Phaser.CANVAS,
+            width: 5,
+            height: 5,
+            canvas: document.getElementById('editor'),
+            backgroundColor: "#FFFFFF",
+            scene: {
+                create: create
+            },
+            scale: {
+                mode: Phaser.Scale.NONE
+            }
+        }
+
+        function debug(message, level = 3) {
+            levels = ['','(ERROR)','(AVISO)','(INFO)']
+            if (consoleLevel >= level) {
+                document.getElementById('editor_log').innerHTML += `${levels[level]} ${message} \n`;
+            }
+            if (debugLevel >= level) {
+                switch (level) {
+                    case 1:
+                        console.error(levels[level], message);
+                        break;
+                    case 2:
+                        console.warn(levels[level], message);
+                        break;
+                    default:
+                        console.log(levels[level], message)
+                }
+            }
+        }
+        
+
+
+        function create()   {
+            const pixelWidth  = $('#filewidth').val(),  // Tamaño de la rejilla definido por el usuario. Por defecto, 8
+                  pixelHeight = $('#fileheight').val(),
+                  canvasWidth = pixelWidth*gridSize,
+                  canvasHeight = pixelHeight*gridSize;
+            lienzo.redim(pixelWidth,pixelHeight);
+            const pixelcontent = lienzo.contenido;
+            editor.scale.resize(canvasWidth, canvasHeight);
+            // dibujamos las líneas
+            for (x = 1; x < pixelWidth; x++)  {
+                this.add.line(0,0,x*gridSize,0,x*gridSize,canvasHeight*2,0xcccccc);
+            }
+            for (y = 1; y < pixelHeight; y++) {
+                this.add.line(0,0,0,y*gridSize,canvasWidth*2,y*gridSize,0xcccccc);
+            }
+            // dibujamos los pixeles
+            for (y=0; y < pixelHeight; y++) {
+                for (x=0; x < pixelWidth; x++) {
+                    lienzo.pixeles[y][x] = this.add.rectangle(x*gridSize+(gridSize/2),y*gridSize+(gridSize/2),gridSize-1,gridSize-1,Phaser.Display.Color.HexStringToColor(pixelcontent[y][x]).color);
+                }
+            }
+            this.input.on('pointerdown',function(pointer) {
+                const realX = Math.floor(pointer.x/gridSize),
+                      realY = Math.floor(pointer.y/gridSize);
+                      lienzo.ultimaposX = realX;
+                      lienzo.ultimaposY = realY;
+                debug(`Touch Event initiated. Cursor position is X(${realX}) Y(${realY}). Current color is ${lienzo.contenido[realY][realX]}`);
+                if (lienzo.contenido[realY][realX] == "#FFFFFF") {
+                    lienzo.contenido[realY][realX] = "#000000";
+                    lienzo.pixeles[realY][realX].setFillStyle(0x000000);
+                } else {
+                    lienzo.contenido[realY][realX] = "#FFFFFF";
+                    lienzo.pixeles[realY][realX].setFillStyle(0xffffff);
+                }
+            })
+            this.input.on('pointermove',function(pointer) {
+                if (pointer.isDown) {
+                    const realX = Math.floor(pointer.x/gridSize),
+                          realY = Math.floor(pointer.y/gridSize);
+                    if (realX != lienzo.ultimaposX || realY != lienzo.ultimaposY) {
+                        debug(`Drag Event initiated. Cursor position is X(${realX}) Y(${realY}). Current color is ${lienzo.contenido[realY][realX]}`);
+                        if (lienzo.contenido[realY][realX] == "#FFFFFF") {
+                            lienzo.contenido[realY][realX] = "#000000";
+                            lienzo.pixeles[realY][realX].setFillStyle(0x000000);
+                        } else {
+                            lienzo.contenido[realY][realX] = "#FFFFFF";
+                            lienzo.pixeles[realY][realX].setFillStyle(0xffffff);
+                        }
+                        lienzo.ultimaposX = realX;
+                        lienzo.ultimaposY = realY;
+                    }
+                }
+            });
+        }
+        // exportación del fichero
+        $('#fileexport').click(function() {
+            const {contenido, ancho, alto} = lienzo;
+            let result = `OGT;${ancho};${alto};;\n`;
+            for (y=0; y < alto; y++) {
+                for (x=0; x < ancho; x++) {
+                    result+=`${contenido[y][x]};`
+                }
+                result+=`;\n`;
+            }
+            $('#filecontent').val(result);
+            debug("Exportación del archivo terminada", 0);
+        });
+        let editor = new Phaser.Game(config);
+
+
+        
+    </script>
+</body>
+</html>

@@ -15,4 +15,4 @@ Cosas que podrá hacer en el futuro:
 - Comprimir el OGT usando LZW para poder compartirlos en twitch
 Mi idea básica era dejar la cabecera descomprimida y añadir el CRC como un nuevo campo, seguido de la cadena LZW.
 
-OGTT;v0.5;<ancho>;<alto>;<crc>;;<imagen comprimida>
+OGTT;v0.5;_ancho_;_alto_;_crc_;;_imagen comprimida_

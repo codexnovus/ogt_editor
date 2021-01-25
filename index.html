@@ -7,7 +7,7 @@
     <title>Editor OGT</title>
     <!-- Imports -->
     <script src="//code.jquery.com/jquery-3.5.1.slim.min.js"></script> <!--Si, soy un dinosaurio, que pasa-->
-    <script src="//cdnjs.cloudflare.com/ajax/libs/phaser/3.51.0/phaser.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/phaser/3.51.0/phaser.js"></script>
 </head>
 <body>
     <div id="thegrid">
@@ -21,11 +21,13 @@
             <fieldset>
                 <label><span>Nombre del fichero:</span> <input type=text value="sintitulo.ogt" name="filename" id="filename"/></label>
                 <label><span>Versión:</span> <select name="filetype" id="filetype"><option value="1">OGT RAW</option><option value="2">OGT TIGHT</option></select></label>
-                <label><span>Ancho:</span> <input type="number" name="filewidth" id="filewidth" value="8"/></label>
-                <label><span>Alto:</span> <input type="number" name="fileheight" id="fileheight" value="8"/></label>
-                <label><a id="fileimport" href="#">Importar</a><a id="fileexport" href="#">Exportar</a></label>
+                <label><span>Ancho:</span> <input type="number" class="imagesize-emitter" name="filewidth" id="filewidth" value="8" min="2" max="50"/></label>
+                <label><span>Alto:</span> <input type="number" class="imagesize-emitter" name="fileheight" id="fileheight" value="8" min="2" max="50"/></label>
+                <label><span>Color del pincel:</span><input type="color" name="cursorcolor" id="cursorcolor" value="#000000"></label>
+                <label><a id="fileimport" href="#">Importar</a><a id="fileexport" href="#">Exportar</a><a id="filedownload" href="#">Descargar</a></label>
                 <textarea name="filecontent" id="filecontent"></textarea>
                 <hr/>
+                <p><em>Notas:</em> Click para cambiar el color.</p>
                 <h4>Consola</h4>
                 <div id="editor_log"></div>
             </fieldset>
@@ -36,6 +38,11 @@
     </div>
     <!-- Sección para los estilos manuales -->
     <style>
+        body {
+            max-width: 1980px;
+            margin: auto;
+            padding: 0 0.5rem;
+        }
         #thegrid {
             display: grid;
             grid-column-gap: 10px;
@@ -92,6 +99,7 @@
         }
         #editor {
             width: 100%;
+            max-width: 90vh;
             box-shadow: 2px 2px 3px rgba(0,0,0,0.5);
         }
     </style>
@@ -106,8 +114,12 @@
         window.lienzo = {
             contenido: [],
             pixeles: [],
+            lineashor: [],
+            lineasver: [],
             ancho: 0,
             alto: 0,
+            posX: 0,
+            posY: 0,
             ultimaposX: 0,
             ultimaposY: 0,
             redim: function (w,h) {
@@ -138,15 +150,80 @@
             }
         };
         
+        class Editor extends Phaser.Scene {
+            constructor () { super (); }
+
+            create () {
+                var scene = this;
+                scene.redim();
+
+                this.input.on('pointerdown',function(pointer) {
+                    lienzo.ultimaposX = lienzo.posX;
+                    lienzo.ultimaposY = lienzo.posY;
+                    const {posX, posY} = lienzo;
+                    const cursorcolor = $('#cursorcolor').val();
+                    lienzo.contenido[posY][posX] = cursorcolor;
+                    lienzo.pixeles[posY][posX].setFillStyle(Phaser.Display.Color.HexStringToColor(cursorcolor).color);
+                })
+
+                this.input.on('pointermove',function(pointer) {
+                    lienzo.posX = Math.floor(pointer.x/gridSize);
+                    lienzo.posY = Math.floor(pointer.y/gridSize);
+                    const {posX, posY, ultimaposX, ultimaposY} = lienzo;
+                    if (pointer.isDown) {
+                        if (posX != ultimaposX || posY != ultimaposY) {
+                            debug(`Drag Event initiated. Cursor position is X(${posX}) Y(${posY}). Current color is ${lienzo.contenido[posY][posX]}`);
+                            const cursorcolor = $('#cursorcolor').val();
+                            lienzo.contenido[posY][posX] = cursorcolor;
+                            lienzo.pixeles[posY][posX].setFillStyle(Phaser.Display.Color.HexStringToColor(cursorcolor).color);
+                            lienzo.ultimaposX = posX;
+                            lienzo.ultimaposY = posY;
+                        }
+                    }
+                });
+
+                $('.imagesize-emitter').change(function () {
+                    scene.redim(true);
+                });
+            }
+
+            redim (destroy = false) {
+                const pixelWidth  = $('#filewidth').val(),  // Tamaño de la rejilla definido por el usuario. Por defecto, 8
+                      pixelHeight = $('#fileheight').val(),
+                      canvasWidth = pixelWidth*gridSize,
+                      canvasHeight = pixelHeight*gridSize;
+                lienzo.redim(pixelWidth,pixelHeight);
+                const pixelcontent = lienzo.contenido;
+                editor.scale.resize(canvasWidth, canvasHeight);
+                if (destroy) {
+                    lienzo.lineashor.forEach(line => line.destroy());
+                    lienzo.lineasver.forEach(line => line.destroy());
+                }
+                // dibujamos las líneas
+                for (x = 1; x < pixelWidth; x++)  {
+                    lienzo.lineashor[x] = this.add.line(0,0,x*gridSize,0,x*gridSize,canvasHeight*2,0xcccccc);
+                }
+                for (y = 1; y < pixelHeight; y++) {
+                    lienzo.lineasver[y] = this.add.line(0,0,0,y*gridSize,canvasWidth*2,y*gridSize,0xcccccc);
+                }
+                // dibujamos los pixeles
+                for (y=0; y < pixelHeight; y++) {
+                    for (x=0; x < pixelWidth; x++) {
+                        if (typeof lienzo.pixeles[y][x] == "undefined") {
+                            lienzo.pixeles[y][x] = this.add.rectangle(x*gridSize+(gridSize/2),y*gridSize+(gridSize/2),gridSize-1,gridSize-1,Phaser.Display.Color.HexStringToColor(pixelcontent[y][x]).color);
+                        }
+                    }
+                }
+            }
+        }
+
         let config = {
             type: Phaser.CANVAS,
             width: 5,
             height: 5,
             canvas: document.getElementById('editor'),
             backgroundColor: "#FFFFFF",
-            scene: {
-                create: create
-            },
+            scene: [ Editor ],
             scale: {
                 mode: Phaser.Scale.NONE
             }
@@ -170,78 +247,109 @@
                 }
             }
         }
-        
+        // importación del fichero
+        $('#fileimport').click(function() {
+            const importedImage  = $('#filecontent').val();
+            const result = importOGT(importedImage);
+            console.log(result);
+            let {status,content} = result;
+            if (!status) {
+                debug(content, 1);
+            } else {
+                // haz algo
+            }
+        });
 
+        // descarga del fichero
+        $('#filedownload').click(function() {
+            const filename = $('#filename').val(),
+                  image    = generateOGT();
+            let   element  = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + image);
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+            debug("Descarga en curso", 0);
+        })
 
-        function create()   {
-            const pixelWidth  = $('#filewidth').val(),  // Tamaño de la rejilla definido por el usuario. Por defecto, 8
-                  pixelHeight = $('#fileheight').val(),
-                  canvasWidth = pixelWidth*gridSize,
-                  canvasHeight = pixelHeight*gridSize;
-            lienzo.redim(pixelWidth,pixelHeight);
-            const pixelcontent = lienzo.contenido;
-            editor.scale.resize(canvasWidth, canvasHeight);
-            // dibujamos las líneas
-            for (x = 1; x < pixelWidth; x++)  {
-                this.add.line(0,0,x*gridSize,0,x*gridSize,canvasHeight*2,0xcccccc);
-            }
-            for (y = 1; y < pixelHeight; y++) {
-                this.add.line(0,0,0,y*gridSize,canvasWidth*2,y*gridSize,0xcccccc);
-            }
-            // dibujamos los pixeles
-            for (y=0; y < pixelHeight; y++) {
-                for (x=0; x < pixelWidth; x++) {
-                    lienzo.pixeles[y][x] = this.add.rectangle(x*gridSize+(gridSize/2),y*gridSize+(gridSize/2),gridSize-1,gridSize-1,Phaser.Display.Color.HexStringToColor(pixelcontent[y][x]).color);
-                }
-            }
-            this.input.on('pointerdown',function(pointer) {
-                const realX = Math.floor(pointer.x/gridSize),
-                      realY = Math.floor(pointer.y/gridSize);
-                      lienzo.ultimaposX = realX;
-                      lienzo.ultimaposY = realY;
-                debug(`Touch Event initiated. Cursor position is X(${realX}) Y(${realY}). Current color is ${lienzo.contenido[realY][realX]}`);
-                if (lienzo.contenido[realY][realX] == "#FFFFFF") {
-                    lienzo.contenido[realY][realX] = "#000000";
-                    lienzo.pixeles[realY][realX].setFillStyle(0x000000);
-                } else {
-                    lienzo.contenido[realY][realX] = "#FFFFFF";
-                    lienzo.pixeles[realY][realX].setFillStyle(0xffffff);
-                }
-            })
-            this.input.on('pointermove',function(pointer) {
-                if (pointer.isDown) {
-                    const realX = Math.floor(pointer.x/gridSize),
-                          realY = Math.floor(pointer.y/gridSize);
-                    if (realX != lienzo.ultimaposX || realY != lienzo.ultimaposY) {
-                        debug(`Drag Event initiated. Cursor position is X(${realX}) Y(${realY}). Current color is ${lienzo.contenido[realY][realX]}`);
-                        if (lienzo.contenido[realY][realX] == "#FFFFFF") {
-                            lienzo.contenido[realY][realX] = "#000000";
-                            lienzo.pixeles[realY][realX].setFillStyle(0x000000);
-                        } else {
-                            lienzo.contenido[realY][realX] = "#FFFFFF";
-                            lienzo.pixeles[realY][realX].setFillStyle(0xffffff);
-                        }
-                        lienzo.ultimaposX = realX;
-                        lienzo.ultimaposY = realY;
-                    }
-                }
-            });
-        }
         // exportación del fichero
         $('#fileexport').click(function() {
+            $('#filecontent').val(generateOGT());
+            debug("Exportación del archivo terminada", 0);
+        });
+        function importOGT(image) {
+            const validHex = /#[0-9A-F]{6}/;
+            // Sanity checks. Hay contenido en el cuadro de importación?
+            if (image.length == 0) { return {status: false, content: 'La imagen está vacía!'}};
+            // filtremos todos los caracteres innecesarios: espacios y saltos de línea
+            image = image.replace(/\r|\n| /g,'');
+            // separamos la imagen por los punto y coma dobles
+            image = image.split(';;');
+            // aislamos la cabecera del resto
+            let [cabecera, ...contenido] = image;
+            // separamos la cabecera por los punto y comas
+            cabecera = cabecera.split(';');
+            // si la cabecera no tiene como mínimo cuatro entradas (id, version, alto, ancho), marcamos el archivo como invalido
+            if (cabecera.length < 4) { return {status: false, content: '¡La imagen no es un fichero OGT válido!'}};
+            let [id, version, alto, ancho, ...meta] = cabecera; // futuras versiones pueden tener más campos, como CRC
+            // si el id no es OGT o OGTT, entonces no es un archivo parseable
+            if (!(id === 'OGT' || id === 'OGTT')) { return {status: false, content: '¡La imagen no es un fichero OGT válido!'}};
+            $('#filetype').val(id === 'OGT'? 1 : 2);
+            // de momento ignoramos versión, aunque puede ser importante en el futuro
+            if (version !== 'v0.5') {debug (`La versión de este fichero es ${version}; este parser solo ha sido probado con la versión 0.5. Puede que no funcione`, 2) };
+            // si las medidas son inferiores a 2 pixels o mayores a 50 pixeles, cancelalo; y si no es un número, pues también
+            if (isNaN(parseInt(ancho)) || isNaN(parseInt(alto))) { return {status: false, content: '¡Este fichero no es un OGT válido!'}};
+            if (ancho < 2 || ancho > 50 || alto < 2 || alto > 50) { return {status: false, content: '¡Las dimensiones de esta imagen no son correctas!'}};
+            // Si la imagen es un OGT prieto, hemos de descomprimirla
+            // TODO: implementar compresión
+            // Redimensionamos el lienzo
+            $('#filewidth').val(ancho);
+            $('#fileheight').val(alto);
+            editor.scene.keys.default.redim(true);
+            // iteramos sobre la imagen
+            for (y = 0; y < alto; y++) {
+                let fila = [];
+                // si por lo que fuera tenemos más filas que las indicadas en la cabecera, rellenamos los huecos con arrays vacios
+                if (typeof contenido[y] === 'undefined' || contenido[y] === "") {
+                    debug (`¡La fila ${y} está vacía! Tratando de recuperar lo que se pueda...`, 2);
+                } else {
+                    fila = contenido[y].split(';');
+                }
+                for (x = 0; x < ancho; x++) {
+                    let color = "#FFFFFF";
+                    // si por lo que fuera tenemos más columnas que las indicadas, o el color es inválido, marcamos el píxel de color blanco
+                    if (!validHex.test(fila[x])) {
+                        debug(`¡La columna ${x} de la fila ${y} no tiene un valor hexadecimal válido! Tratando de recuperar lo que se pueda...`, 2);
+                    } else {
+                        color = fila[x];
+                    }
+                    lienzo.contenido[y][x] = color;
+                    lienzo.pixeles[y][x].setFillStyle(Phaser.Display.Color.HexStringToColor(color).color);
+                }
+                console.log(fila);
+            }
+            
+            return {status:true, content: 'Se ha cargado la imagen correctamente'};
+        }
+
+        function generateOGT() {
             const {contenido, ancho, alto} = lienzo;
-            let result = `OGT;${ancho};${alto};;\n`;
+            let result = "";
+            result += `OGT;${ancho};${alto};;\n`;
             for (y=0; y < alto; y++) {
                 for (x=0; x < ancho; x++) {
                     result+=`${contenido[y][x]};`
                 }
                 result+=`;\n`;
             }
-            $('#filecontent').val(result);
-            debug("Exportación del archivo terminada", 0);
-        });
-        let editor = new Phaser.Game(config);
+            return result;
+        }
 
+
+        let editor = new Phaser.Game(config);
+        
 
         
     </script>

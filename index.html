@@ -251,7 +251,6 @@
         $('#fileimport').click(function() {
             const importedImage  = $('#filecontent').val();
             const result = importOGT(importedImage);
-            console.log(result);
             let {status,content} = result;
             if (!status) {
                 debug(content, 1);
@@ -279,6 +278,7 @@
             $('#filecontent').val(generateOGT());
             debug("Exportación del archivo terminada", 0);
         });
+
         function importOGT(image) {
             const validHex = /#[0-9A-F]{6}/;
             // Sanity checks. Hay contenido en el cuadro de importación?
@@ -303,7 +303,9 @@
             if (isNaN(parseInt(ancho)) || isNaN(parseInt(alto))) { return {status: false, content: '¡Este fichero no es un OGT válido!'}};
             if (ancho < 2 || ancho > 50 || alto < 2 || alto > 50) { return {status: false, content: '¡Las dimensiones de esta imagen no son correctas!'}};
             // Si la imagen es un OGT prieto, hemos de descomprimirla
-            // TODO: implementar compresión
+            if (id === 'OGTT') {
+                contenido = LZW.decompress(contenido).split(';;');
+            }
             // Redimensionamos el lienzo
             $('#filewidth').val(ancho);
             $('#fileheight').val(alto);
@@ -328,30 +330,122 @@
                     lienzo.contenido[y][x] = color;
                     lienzo.pixeles[y][x].setFillStyle(Phaser.Display.Color.HexStringToColor(color).color);
                 }
-                console.log(fila);
             }
             
             return {status:true, content: 'Se ha cargado la imagen correctamente'};
         }
 
         function generateOGT() {
-            const {contenido, ancho, alto} = lienzo;
+            const {contenido, ancho, alto} = lienzo,
+                  formato = $('#filetype').val(); // 1 = RAW, 2 = TIGHT
             let result = "";
-            result += `OGT;${ancho};${alto};;\n`;
-            for (y=0; y < alto; y++) {
-                for (x=0; x < ancho; x++) {
-                    result+=`${contenido[y][x]};`
-                }
-                result+=`;\n`;
+            switch (formato) {
+                case "1": // OGT RAW
+                    result += `OGT;v0.5;${ancho};${alto};;\n`;
+                    for (y=0; y < alto; y++) {
+                        for (x=0; x < ancho; x++) {
+                            result+=`${contenido[y][x]};`
+                        }
+                        result += `;\n`;
+                    }
+                    break;
+                case "2": // OGT PRIETO
+                    result += `OGTT;v0.5;${ancho};${alto};;`;
+                    let imagen = "";
+                    for (y=0; y < alto; y++) {
+                        for (x=0; x < ancho; x++) {
+                            imagen+=`${contenido[y][x]};`
+                        }
+                        imagen+=`;`;
+                    }
+                    result += LZW.compress(imagen);
+                    break;
+                default:
+                    debug("Algo malo ha pasado con el generador de OGT",1);
+                    break;
             }
+
             return result;
         }
 
 
         let editor = new Phaser.Game(config);
         
+        // Utilidades
+        // interprete LZW con cálculo de CRC32
+        const LZW = {
+            compress: function(uncompressedData) {
+                // Inicializamos variables
+                let dataArray = (uncompressedData+"").split(""),
+                    compressedData  = [],
+                    dictionary = {},
+                    phrase = dataArray[0],
+                    code = 71,
+                    i, currChar;
+                for (i=1; i < dataArray.length; i++) {
+                    currChar = dataArray[i];
+                    if (dictionary[phrase+currChar] != null) {
+                        phrase += currChar;
+                    } else {
+                        compressedData.push(phrase.length > 1 ? dictionary[phrase] : phrase.charCodeAt(0));
+                        dictionary[phrase + currChar] = code;
+                        code++;
+                        phrase = currChar;
+                    }
+                }
+                compressedData.push(phrase.length > 1 ? dictionary[phrase] : phrase.charCodeAt(0));
+                for (i=0; i < compressedData.length; i++) {
+                    compressedData[i] = String.fromCharCode(compressedData[i]);
+                }
+                return compressedData.join("");
+            },
+            decompress: function(compressedData) {
+                let dataArray= (compressedData+"").split(""),
+                    dictionary = {},
+                    currChar = dataArray[0],
+                    oldPhrase = currChar,
+                    uncompressedData = [currChar],
+                    code = 71,
+                    phrase, i;
+                for (i = 1; i < dataArray.length; i++) {
+                    let currCode = dataArray[i].charCodeAt(0);
+                    if(currCode < 71) {
+                        phrase = dataArray[i];
+                    } else {
+                        phrase = dictionary[currCode] ? dictionary[currCode] : (oldPhrase + currChar);
+                    }
+                    uncompressedData.push(phrase);
+                    currChar = phrase.charAt(0);
+                    dictionary[code] = oldPhrase + currChar;
+                    code++;
+                    oldPhrase = phrase;
+                }
+                return uncompressedData.join("");
+            },
+            CRC: function(string) {
+                const generateTable = () => {
+                    let c, table = [];
+                    for (var i = 0; i < 256; i++) {
+                        c = i;
+                        for (var n = 0; n < 8; n++) {
+                            c = ((c&1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+                        }
+                        table[i] = c;
+                    }
+                    return table;
+                }
 
-        
+                let crcTable = window.crcTable || (window.crcTable = generateTable()),
+                    crc = 0 ^ (-1);
+                string = unescape(encodeURIComponent(string));
+                
+                for (let i = 0; i < string.length; i++) {
+                    crc = (crc >>> 8) ^ crcTable[(crc ^ string.charCodeAt(i)) && 0xFF];
+                }
+                 
+                return (crc ^ (-1)) >>> 0;
+            }
+        }
     </script>
 </body>
 </html>

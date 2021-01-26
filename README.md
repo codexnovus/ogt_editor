@@ -7,12 +7,16 @@ Cosas que puede hacer de momento:
 - Exportar el resultado en OGT RAW
 - Color
 - Importar OGT RAW
+- Comprimir el OGT usando LZW para poder compartirlos en twitch (OGT TIGHT || OGT PRIETO)
 
 Cosas que podrá hacer en el futuro:
-- Calcular CRC
-- Comprimir el OGT usando LZW para poder compartirlos en twitch
+- Calcular CRC (la función está implementada pero falta ver como se gestionarán los meta)
 - Capturar colores usando May+Click
 
-_Mi idea básica era dejar la cabecera descomprimida y añadir el CRC como un nuevo campo, seguido de la cadena LZW._
+## Formato OGT TIGHT
+Igual que OGT RAW, con las siguientes diferencias:
+- Se eliminan los saltos de línea (Se usa como separador ;;) * de hecho, mi parser de OGT RAW también ignora los saltos de linea pero la especificación "oficial" es que el separador de línea es `;;\n`
+- La cabecera usa el identificador "OGTT" en vez de OGT
+- La imagen está comprimida usando LZW
 
-`OGTT;v0.5;_ancho_;_alto_;_crc_;;_imagen comprimida_`
+El resultado es una reducción notable de tamaño, especialmente en imagenes con pocos colores.

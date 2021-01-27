@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor OGT</title>
+    <!-- Imports -->
+    <script src="//code.jquery.com/jquery-3.5.1.slim.min.js"></script> <!--Si, soy un dinosaurio, que pasa-->
+    <script src="//cdnjs.cloudflare.com/ajax/libs/phaser/3.51.0/phaser.js"></script>
+    <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+    <main>
+        <header>
+            <h1>Editor de archivos OGT</h1>
+        </header>
+        <section>
+            <canvas id="editor"></canvas>
+        </section>
+        <aside>
+            <nav id="archivo">
+                <h3>Propiedades del fichero</h3>
+                <div class="fieldset">
+                    <label class="size1">Versión</label>
+                    <select class="size3" name="filetype" id="filetype">
+                        <option value="1">OGT RAW</option>
+                        <option value="2">OGT TIGHT</option>
+                    </select>
+                    <label class="size1">Ancho</label>
+                    <input class="size1" type="number" class="imagesize-emitter" name="filewidth" id="filewidth" value="8" min="2" max="50"/>
+                    <label class="size1">Alto:</label>
+                    <input class="size1" type="number" class="imagesize-emitter" name="fileheight" id="fileheight" value="8" min="2" max="50"/>
+                    <div class="size4 button-group">
+                        <a class="button" id="filesave">Guardar</a>
+                        <a class="button" id="fileimport">Importar</a>
+                        <a class="button" id="fileexport">Exportar</a>
+                    </div>
+                    <textarea class="size4" name="filecontent" id="filecontent" placeholder="Copiar aquí el fichero para importar"></textarea>
+                </div>
+            </nav>
+            <nav id="color">
+                <h3>Colores</h3>
+                <div class="fieldset">
+                    <label>Color del pincel: <span id="colorvalue">#000000</span></label>
+                    <input type="color" name="cursorcolor" id="cursorcolor" value="#000000">
+                </div>
+            </nav>
+            <nav id="log">
+                <h3>Registro</h3>
+                <tt id="editor_log"></tt>
+            </nav>
+        </aside>
+        <footer>
+            V0.5 | <a href="https://github.com/rafalagoon/ogt">OGT</a> es una idea de <a href="https://twitter.com/RafaLagoon">Rafa Laguna</a> | <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">Recursos de programación</a>
+        </footer>
+    </main>
+    <script src="editor.js"></script>
+</body>
+</html>
